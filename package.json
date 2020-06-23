@@ -1,0 +1,30 @@
+{
+  "name": "court-notifications-bot",
+  "description": "Bot to push notifications for Kleros Court.",
+  "keywords": [
+    "ethereum",
+    "web3",
+    "kleros",
+    "court"
+  ],
+  "main": "./src/index.js",
+  "version": "1.0.0",
+  "author": "Kleros",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "start": "env-cmd ./.env.staging node ./src/index.js",
+    "start:production": "env-cmd ./.env.production node ./src/index.js"
+  },
+  "devDependencies": {
+    "standard-version": "^4.4.0"
+  },
+  "dependencies": {
+    "axios": "^0.18.0",
+    "delay": "^4.1.0",
+    "env-cmd": "^8.0.2",
+    "mongodb": "^3.5.9",
+    "web3": "^1.2.6",
+    "web3-provider-engine": "^14.2.0"
+  }
+}

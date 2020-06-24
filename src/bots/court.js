@@ -7,6 +7,15 @@ const _court = require('../contracts/court.json')
 const COURT_MONGO_COLLECTION = 'court'
 const IPFS_URL = 'https://ipfs.kleros.io'
 
+const PERIODS = {
+    "EVIDENCE": 0,
+    "COMMIT": 1,
+    "VOTE": 2,
+    "APPEAL": 3,
+    "EXECUTION": 4
+}
+
+
 module.exports = async (web3, mongoClient, courtAddress) => {
   // Instantiate the contracts.
   const courtInstance = new web3.eth.Contract(
@@ -33,7 +42,6 @@ module.exports = async (web3, mongoClient, courtAddress) => {
   while (true) {
     await delay(process.env.DELAY_AMOUNT)
     currentBlock = await web3.eth.getBlockNumber()
-    console.log(lastBlock)
     const drawEvents = await courtInstance.getPastEvents('Draw', {
       fromBlock: lastBlock,
       toBlock: 'latest'
@@ -55,11 +63,28 @@ module.exports = async (web3, mongoClient, courtAddress) => {
         }
       }
     }
+
+    const newPeriods = await courtInstance.getPastEvents('NewPeriod', {
+      fromBlock: lastBlock,
+      toBlock: 'latest'
+    })
+
+    if (newPeriods.length) {
+      for (let newPeriodEvent of newPeriods) {
+        if (newPeriodEvent.returnValues._period == PERIODS['VOTE']) {
+          const disputeID = newPeriodEvent.returnValues._disputeID
+          const jurors = getJurorsInCurrentRound(disputeID, courtInstance)
+        }
+      }
+    }
     // db.findOneAndUpdate({'proxyAddress': proxyAddress}, {$set: {lastBlock: currentBlock}}, { upsert: true })
     // lastBlock=currentBlock+1
   }
 }
 
+/*
+ *
+ */
 const getDrawnJurorsByDispute = (drawEvents) => {
   const disputes = {}
   for (let i=0; i<drawEvents.length; i++) {
@@ -86,4 +111,25 @@ const getDrawnJurorsByDispute = (drawEvents) => {
   }
 
   return formattedDisputes
+}
+
+const getJurorsInCurrentRound = async (disputeID, courtInstance) => {
+  const dispute = await courtInstance.methods.getDispute(disputeID).call()
+  const numberOfVotes = dispute[0][dispute[0].length - 1]
+
+  const seenJurors = {}
+  for (let i=0; i<parseInt(numberOfVotes); i++) {
+    const vote = courtInstance.methods.getVote(disputeID, dispute[0].length - 1, i).call()
+    // vote[0] == address, vote[3] == voted
+    seenJurors[vote[0]] = vote[3]
+  }
+
+  const currentJurors = []
+  for (let address of Object.keys(seenJurors)) {
+    currentJurors.push({
+      address,
+      voted: seenJurors[address]
+    })
+  }
+  return currentJurors
 }

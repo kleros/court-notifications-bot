@@ -1,6 +1,7 @@
 const delay = require('delay')
 const Web3 = require('web3')
 const ZeroClientProvider = require('web3-provider-engine/zero')
+const Archon = require('@kleros/archon')
 
 const _mongoClient = require('./mongo-client')
 const bots = [require('./bots/court')]
@@ -12,7 +13,7 @@ const run = async bot => {
   // const privateKey = process.env.PRIVATE_KEY
   // const account = web3.eth.accounts.privateKeyToAccount(privateKey)
   // web3.eth.accounts.wallet.add(account)
-
+  const archon = new Archon(process.env.WEB3_PROVIDER_URL, 'https://ipfs.kleros.io')
   const mongoClient = await _mongoClient()
   const courtAddresses = [
     process.env.COURT_CONTRACT_ADDRESS,
@@ -22,7 +23,7 @@ const run = async bot => {
   while (true) {
     try {
       for (let i=0; i<courtAddresses.length; i++) {
-        bots.push(bot(web3, mongoClient, courtAddresses[i]))
+        bots.push(bot(web3, mongoClient, courtAddresses[i], archon))
       }
       await Promise.all(bots)
     } catch (err) {

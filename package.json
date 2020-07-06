@@ -20,6 +20,7 @@
     "standard-version": "^4.4.0"
   },
   "dependencies": {
+    "@kleros/archon": "^0.10.1",
     "axios": "^0.18.0",
     "delay": "^4.1.0",
     "env-cmd": "^8.0.2",

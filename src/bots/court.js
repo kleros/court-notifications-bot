@@ -54,14 +54,15 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
       for (let disputeID of Object.keys(jurorsForDisputes)) {
         for (let juror of jurorsForDisputes[disputeID]) {
           const address = juror.address
-          await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
-            {
-                "event": "Draw",
-                "_disputeID": disputeID,
-                "_appeal": juror.appeal,
-                "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67'
-            }
-          )
+          // Don't send Draw Emails yet
+          // await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
+          //   {
+          //       "event": "Draw",
+          //       "_disputeID": disputeID,
+          //       "_appeal": juror.appeal,
+          //       "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67'
+          //   }
+          // )
         }
       }
     }
@@ -81,7 +82,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
               {
                   "event": "Vote",
                   "_disputeID": disputeID,
-                  "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67'
+                  "_address": juror.address
               }
             )
           }
@@ -105,14 +106,13 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
       // remind jurors
       if (timeUntilNextPeriod <= 86400) {
         const jurors = await getJurorsInCurrentRound(disputeID, courtInstance)
-        console.log('sending VOTE REMINDER emails')
         for (let juror of jurors) {
           if (!juror.voted) {
             await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
               {
                   "event": "VoteReminder",
                   "_disputeID": disputeID,
-                  "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67'
+                  "_address": juror.address
               }
             )
           }
@@ -130,13 +130,12 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
 
     for (let appeal of newAppeals) {
       jurorsInLastRound = await getJurorsInCurrentRound(appeal.returnValues._disputeID, courtInstance, true)
-      console.log('sending APPEAL emails')
       for (let juror of jurorsInLastRound) {
         await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
           {
               "event": "Appeal",
               "_disputeID": appeal.returnValues._disputeID,
-              "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67'
+              "_address": juror.address
           }
         )
       }
@@ -169,7 +168,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
             {
                 "event": "Won",
                 "_disputeID": disputeID,
-                "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67',
+                "_address": account,
                 "_ethWon": tokenShiftsByDispute[disputeID][account].ethAmount,
                 "_pnkWon": tokenShiftsByDispute[disputeID][account].pnkAmount,
                 "_caseTitle": metaEvidence.metaEvidenceJSON.title
@@ -181,7 +180,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
             {
                 "event": "Lost",
                 "_disputeID": disputeID,
-                "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67',
+                "_address": account,
                 "_pnkLost": tokenShiftsByDispute[disputeID][account].pnkAmount,
                 "_caseTitle": metaEvidence.metaEvidenceJSON.title
             }

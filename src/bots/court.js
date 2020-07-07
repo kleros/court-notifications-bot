@@ -28,8 +28,8 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
   const db = mongoClient.collection(COURT_MONGO_COLLECTION)
 
   // get our starting point
-  let lastBlock = 10388102
-  let currentBlock = 10388102
+  let lastBlock = process.env.START_BLOCK
+  let currentBlock = process.env.START_BLOCK
   let votingDisputes = []
   let appState = await db.findOne({'courtAddress': courtAddress})
   if (appState) {

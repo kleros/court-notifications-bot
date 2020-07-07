@@ -40,6 +40,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
     // if starting from scratch we can go from the current block
     await db.insertOne({'courtAddress': courtAddress, 'lastBlock': currentBlock})
   }
+  console.log(lastBlock)
 
   while (true) {
     await delay(process.env.DELAY_AMOUNT)

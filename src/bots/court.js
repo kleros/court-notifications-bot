@@ -40,7 +40,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
     // if starting from scratch we can go from the current block
     await db.insertOne({'courtAddress': courtAddress, 'lastBlock': currentBlock})
   }
-  console.log(lastBlock)
+  votingDisputes = [ ...new Set(votingDisputes) ]
 
   while (true) {
     await delay(process.env.DELAY_AMOUNT)
@@ -55,13 +55,14 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
       for (let disputeID of Object.keys(jurorsForDisputes)) {
         for (let juror of jurorsForDisputes[disputeID]) {
           const address = juror.address
+          // console.log("SENDING DRAW EMAIL TO " + juror.address + " IN CASE " + disputeID)
           // Don't send Draw Emails yet
           // await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
           //   {
           //       "event": "Draw",
           //       "_disputeID": disputeID,
           //       "_appeal": juror.appeal,
-          //       "_address": '0x27fE00A5a1212e9294b641BA860a383783016C67'
+          //       "_address": juror.address
           //   }
           // )
         }
@@ -79,6 +80,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
           const disputeID = newPeriodEvent.returnValues._disputeID
           const jurors = await getJurorsInCurrentRound(disputeID, courtInstance)
           for (let juror of jurors) {
+            console.log("SENDING TIME TO VOTE EMAIL TO " + juror.address + " IN CASE " + disputeID)
             await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
               {
                   "event": "Vote",
@@ -87,8 +89,9 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
               }
             )
           }
-          // add disputeID to list of disputes currently voting
-          votingDisputes.push(disputeID)
+          // add disputeID to list of disputes currently voting if not already there
+          if (votingDisputes.indexOf(disputeID) === -1)
+            votingDisputes.push(disputeID)
         } else if (newPeriodEvent.returnValues._period == PERIODS['APPEAL']) {
           const disputeID = newPeriodEvent.returnValues._disputeID
           // remove disputeID from disputes currently voting
@@ -99,16 +102,16 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
     }
 
     for (let disputeID of votingDisputes) {
-      const subcourt = await courtInstance.methods.getSubcourt(disputeID).call()
       const dispute = await courtInstance.methods.disputes(disputeID).call()
+      const subcourt = await courtInstance.methods.getSubcourt(dispute.subcourtID).call()
       const now = new Date()
-      const timeUntilNextPeriod = subcourt.timesPerPeriod[2] - (now.getTime() - (dispute.lastPeriodChange * 1000))
-
+      const timeUntilNextPeriod = subcourt.timesPerPeriod[2] - ((now.getTime() / 1000) - (dispute.lastPeriodChange))
       // remind jurors
-      if (timeUntilNextPeriod <= 86400) {
+      if (timeUntilNextPeriod <= 86400 && timeUntilNextPeriod > 0) {
         const jurors = await getJurorsInCurrentRound(disputeID, courtInstance)
         for (let juror of jurors) {
           if (!juror.voted) {
+            console.log("SENDING VOTE REMINDER EMAIL TO " + juror.address + " IN CASE " + disputeID)
             await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
               {
                   "event": "VoteReminder",
@@ -132,6 +135,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
     for (let appeal of newAppeals) {
       jurorsInLastRound = await getJurorsInCurrentRound(appeal.returnValues._disputeID, courtInstance, true)
       for (let juror of jurorsInLastRound) {
+        console.log("SENDING APPEAL EMAIL TO " + juror.address + " IN CASE " + appeal.returnValues._disputeID)
         await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
           {
               "event": "Appeal",
@@ -165,24 +169,26 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
         )
         if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
           // Won the case
+          console.log("SENDING PNK REDISTRIBUTION " + account + " IN CASE " + disputeID)
           await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
             {
                 "event": "Won",
                 "_disputeID": disputeID,
                 "_address": account,
-                "_ethWon": tokenShiftsByDispute[disputeID][account].ethAmount,
-                "_pnkWon": tokenShiftsByDispute[disputeID][account].pnkAmount,
+                "_ethWon": formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount),
+                "_pnkWon": formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount),
                 "_caseTitle": metaEvidence.metaEvidenceJSON.title
             }
           )
         } else {
           // Lost the case
+          console.log("SENDING PNK REDISTRIBUTION " + account + " IN CASE " + disputeID)
           await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
             {
                 "event": "Lost",
                 "_disputeID": disputeID,
                 "_address": account,
-                "_pnkLost": tokenShiftsByDispute[disputeID][account].pnkAmount,
+                "_pnkLost": formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount),
                 "_caseTitle": metaEvidence.metaEvidenceJSON.title
             }
           )
@@ -233,7 +239,7 @@ const getJurorsInCurrentRound = async (disputeID, courtInstance, _appeal=false) 
 
   const seenJurors = {}
   for (let i=0; i<parseInt(numberOfVotes); i++) {
-    const vote = courtInstance.methods.getVote(disputeID, appeal, i).call()
+    const vote = await courtInstance.methods.getVote(disputeID, appeal, i).call()
     // vote[0] == address, vote[3] == voted
     seenJurors[vote[0]] = vote[3]
   }
@@ -264,4 +270,12 @@ const formatTokenMovementEvents = (eventLogs, web3) => {
   }
 
   return disputes
+}
+
+const formatAmount = (amount) => {
+  const a = parseFloat(amount)
+  if (a > 1)
+    return Number(a.toFixed(2))
+  else
+    return Number(a.toFixed(4))
 }

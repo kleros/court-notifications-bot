@@ -169,7 +169,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
         )
         if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
           // Won the case
-          console.log("SENDING PNK REDISTRIBUTION " + account + " IN CASE " + disputeID)
+          console.log("SENDING PNK WON " + account + " IN CASE " + disputeID)
           await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
             {
                 "event": "Won",
@@ -182,7 +182,7 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
           )
         } else {
           // Lost the case
-          console.log("SENDING PNK REDISTRIBUTION " + account + " IN CASE " + disputeID)
+          console.log("SENDING PNK LOSS " + account + " IN CASE " + disputeID)
           await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
             {
                 "event": "Lost",
@@ -265,8 +265,8 @@ const formatTokenMovementEvents = (eventLogs, web3) => {
       pnkAmount: 0
     }
 
-    disputes[disputeID][address].ethAmount += web3.utils.fromWei(log.returnValues._ETHAmount).substr(1)
-    disputes[disputeID][address].pnkAmount += web3.utils.fromWei(log.returnValues._tokenAmount).substr(1)
+    disputes[disputeID][address].ethAmount += Number(web3.utils.fromWei(log.returnValues._ETHAmount))
+    disputes[disputeID][address].pnkAmount += Number(web3.utils.fromWei(log.returnValues._tokenAmount))
   }
 
   return disputes

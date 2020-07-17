@@ -55,16 +55,15 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
       for (let disputeID of Object.keys(jurorsForDisputes)) {
         for (let juror of jurorsForDisputes[disputeID]) {
           const address = juror.address
-          // console.log("SENDING DRAW EMAIL TO " + juror.address + " IN CASE " + disputeID)
-          // Don't send Draw Emails yet
-          // await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
-          //   {
-          //       "event": "Draw",
-          //       "_disputeID": disputeID,
-          //       "_appeal": juror.appeal,
-          //       "_address": juror.address
-          //   }
-          // )
+          console.log("SENDING DRAW EMAIL TO " + juror.address + " IN CASE " + disputeID)
+          await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
+            {
+                "event": "Draw",
+                "_disputeID": disputeID,
+                "_appeal": juror.appeal,
+                "_address": juror.address
+            }
+          )
         }
       }
     }

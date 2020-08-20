@@ -3,6 +3,7 @@ const axios = require('axios')
 const delay = require('delay')
 
 const _court = require('../contracts/court.json')
+const _policyRegistry = require('../contracts/policy-registry.json')
 
 const COURT_MONGO_COLLECTION = 'court'
 const IPFS_URL = 'https://ipfs.kleros.io'
@@ -21,6 +22,11 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
   const courtInstance = new web3.eth.Contract(
     _court.abi,
     courtAddress
+  )
+
+  const policyRegistryInstance = new web3.eth.Contract(
+    _policyRegistry.abi,
+    '0xCf1f07713d5193FaE5c1653C9f61953D048BECe4'
   )
 
   // connect to the right collection
@@ -195,6 +201,25 @@ module.exports = async (web3, mongoClient, courtAddress, archon) => {
       }
     }
 
+    // Staking
+    const stakeEvents = await courtInstance.getPastEvents('StakeSet', {
+      fromBlock: lastBlock,
+      toBlock: 'latest'
+    })
+    if (stakeEvents.length) {
+      const jurors = await getSetStakesForJuror(stakeEvents, policyRegistryInstance, web3)
+      for (let j of Object.keys(jurors)) {
+        await axios.post('https://iu6s7cave4.execute-api.us-east-2.amazonaws.com/production/event-handler-court-emails',
+          {
+              "event": "StakeChanged",
+              "_address": j,
+              "_stakesChanged": jurors[j]
+          }
+        )
+      }
+    }
+
+
     db.findOneAndUpdate({'courtAddress': courtAddress}, {$set: {lastBlock: currentBlock}}, { upsert: true })
     lastBlock=currentBlock+1
   }
@@ -277,4 +302,37 @@ const formatAmount = (amount) => {
     return Number(a.toFixed(2))
   else
     return Number(a.toFixed(4))
+}
+
+const getSetStakesForJuror = async (setStakeEvents, policyRegistryInstance, web3) => {
+  const subcourtCache = {}
+  const jurors = {}
+  for (log of setStakeEvents) {
+    if (!jurors[log.returnValues._address]) jurors[log.returnValues._address] = {}
+    let policy = subcourtCache[log.returnValues._subcourtID]
+    if (!subcourtCache[log.returnValues._subcourtID]) {
+      let uri = await policyRegistryInstance.methods.policies(log.returnValues._subcourtID).call()
+      if (uri.substring(0,6) === "/ipfs/") {
+        uri = `https://ipfs.kleros.io${uri}`
+      }
+      policy = (await axios.get(uri)).data
+      subcourtCache[log.returnValues._subcourtID] = policy
+    }
+
+    // Take the most recent value for each subcourt
+    jurors[log.returnValues._address][policy.name] = web3.utils.fromWei(log.returnValues._stake)
+  }
+
+  const formatted = {}
+  for (let j of Object.keys(jurors)) {
+    formatted[j] = []
+    for (let subcourtName of Object.keys(jurors[j])) {
+      formatted[j].push({
+        amount: jurors[j][subcourtName],
+        subcourt: subcourtName
+      })
+    }
+  }
+
+  return formatted
 }

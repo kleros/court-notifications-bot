@@ -21,10 +21,16 @@ const run = async bot => {
 
   let bots = []
   while (true) {
-    for (let i=0; i<courtAddresses.length; i++) {
-      bots.push(bot(web3, mongoClient, courtAddresses[i], archon))
+    try {
+      for (let i=0; i<courtAddresses.length; i++) {
+        bots.push(bot(web3, mongoClient, courtAddresses[i], archon))
+      }
+      await Promise.all(bots)
+    } catch (err) {
+      console.error('Bot error: ', err)
     }
-    await Promise.all(bots)
+    // Wait 30 seconds before restarting failed bot.
+    await delay(30000)
   }
 }
 bots.forEach(run)

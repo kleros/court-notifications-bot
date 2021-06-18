@@ -6,9 +6,14 @@ const _mongoClient = require("./mongo-client");
 const bot = require("./bots/court");
 
 const _court = require("./contracts/court.json");
+const _xDaiCourt = require("./contracts/xdai-court.json");
 const _policyRegistry = require("./contracts/policy-registry.json");
 
 mainnet();
+
+if (process.env.XDAI_ENABLED) {
+  xDai();
+}
 
 const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
 
@@ -28,6 +33,25 @@ async function mainnet() {
     courtContracts: [new web3.eth.Contract(_court.abi, process.env.COURT_ADDRESS)],
     policyRegistryContracts: [new web3.eth.Contract(_policyRegistry.abi, process.env.POLICY_REGISTRY_ADDRESS)],
     webhookUrl: process.env.WEBHOOK_URL,
+  });
+}
+
+async function xDai() {
+  const web3 = new Web3(process.env.XDAI_WEB3_PROVIDER_URL);
+  const archon = new Archon(process.env.XDAI_WEB3_PROVIDER_URL, ipfsGateway);
+  const courtMongoCollection = process.env.XDAI_COURT_MONGO_COLLECTION;
+
+  const mongoClient = await _mongoClient();
+  // connect to the right collection
+  const mongoCollection = await mongoClient.createCollection(courtMongoCollection);
+
+  run(bot, {
+    archon,
+    web3,
+    mongoCollection,
+    courtContracts: [new web3.eth.Contract(_xDaiCourt.abi, process.env.XDAI_COURT_ADDRESS)],
+    policyRegistryContracts: [new web3.eth.Contract(_policyRegistry.abi, process.env.XDAI_POLICY_REGISTRY_ADDRESS)],
+    webhookUrl: process.env.XDAI_WEBHOOK_URL,
   });
 }
 

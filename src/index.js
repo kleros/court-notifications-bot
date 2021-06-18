@@ -9,13 +9,13 @@ const _court = require("./contracts/court.json");
 const _xDaiCourt = require("./contracts/xdai-court.json");
 const _policyRegistry = require("./contracts/policy-registry.json");
 
+const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
+
 mainnet();
 
 if (process.env.XDAI_ENABLED) {
   xDai();
 }
-
-const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
 
 async function mainnet() {
   const web3 = new Web3(process.env.WEB3_PROVIDER_URL);

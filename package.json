@@ -13,7 +13,7 @@
   "license": "MIT",
   "private": false,
   "scripts": {
-    "start": "env-cmd ./.env.staging node ./src/index.js",
+    "start": "env-cmd ./.env node ./src/index.js",
     "start:production": "env-cmd ./.env.production node ./src/index.js",
     "prepare": "husky install"
   },
@@ -27,18 +27,18 @@
     "eslint-plugin-prettier": "^3.4.0",
     "eslint-plugin-promise": "^5.1.0",
     "husky": "^6.0.0",
-    "lint-staged": "^11.0.0",
+    "lint-staged": "^10.0.0",
     "prettier": "^2.3.1",
     "prettier-config-standard": "^4.0.0",
     "standard-version": "^4.4.0"
   },
   "dependencies": {
-    "@kleros/archon": "^1.2.4",
+    "@kleros/archon": "~0.10.4",
     "axios": "^0.18.0",
     "delay": "^4.1.0",
     "env-cmd": "^8.0.2",
     "mongodb": "^3.5.9",
-    "web3": "^1.3.6",
+    "web3": "1.2.6",
     "web3-provider-engine": "^14.2.0"
   }
 }

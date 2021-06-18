@@ -14,7 +14,8 @@
   "private": false,
   "scripts": {
     "start": "env-cmd ./.env.staging node ./src/index.js",
-    "start:production": "env-cmd ./.env.production node ./src/index.js"
+    "start:production": "env-cmd ./.env.production node ./src/index.js",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "eslint": "^7.28.0",
@@ -25,6 +26,8 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^3.4.0",
     "eslint-plugin-promise": "^5.1.0",
+    "husky": "^6.0.0",
+    "lint-staged": "^11.0.0",
     "prettier": "^2.3.1",
     "prettier-config-standard": "^4.0.0",
     "standard-version": "^4.4.0"

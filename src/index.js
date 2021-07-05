@@ -13,7 +13,7 @@ const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
 
 mainnet();
 
-if (process.env.XDAI_ENABLED) {
+if (process.env.XDAI_ENABLED === "true") {
   xDai();
 }
 

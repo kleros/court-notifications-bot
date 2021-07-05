@@ -3,6 +3,7 @@ module.exports = {
     {
       name: "court-notification-bot",
       script: "./src/index.js",
+      node_args: "-r dotenv-safe/config",
     },
   ],
 };

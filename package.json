@@ -14,8 +14,7 @@
   "private": false,
   "scripts": {
     "start": "env-cmd ./.env node src/index.js",
-    "start:production": "env-cmd ./.env.production pm2 start ecosystem.config.js",
-    "postinstall": "pm2 install pm2-logrotate",
+    "start:production": "pm2 start ecosystem.config.js",
     "prepare": "husky install"
   },
   "devDependencies": {
@@ -37,6 +36,7 @@
     "@kleros/archon": "~0.10.4",
     "axios": "^0.18.0",
     "delay": "^4.1.0",
+    "dotenv-safe": "^8.2.0",
     "env-cmd": "^8.0.2",
     "mongodb": "^3.5.9",
     "pm2": "^5.1.0",

@@ -13,8 +13,9 @@
   "license": "MIT",
   "private": false,
   "scripts": {
-    "start": "env-cmd ./.env node ./src/index.js",
-    "start:production": "env-cmd ./.env.production node ./src/index.js",
+    "start": "env-cmd ./.env node src/index.js",
+    "start:production": "env-cmd ./.env.production pm2 start ecosystem.config.js",
+    "postinstall": "pm2 install pm2-logrotate",
     "prepare": "husky install"
   },
   "devDependencies": {
@@ -38,6 +39,7 @@
     "delay": "^4.1.0",
     "env-cmd": "^8.0.2",
     "mongodb": "^3.5.9",
+    "pm2": "^5.1.0",
     "web3": "1.2.6",
     "web3-provider-engine": "^14.2.0"
   }

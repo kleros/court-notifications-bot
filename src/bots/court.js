@@ -10,7 +10,8 @@ const Period = {
 };
 
 module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, webhookUrl }) => {
-  const courtAddress = court.options.address;
+  // Get the lower-case address instead of the checksumed version
+  const courtAddress = String(court.options.address).toLowerCase();
 
   // get our starting point
   let lastBlock = process.env.START_BLOCK;

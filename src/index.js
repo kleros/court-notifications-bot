@@ -71,6 +71,7 @@ async function run(
   while (shouldRun) {
     try {
       for (let i = 0; i < courtContracts.length; i++) {
+        console.info(`${networkName}: starting bot for KlerosLiquid at ${courtContracts[i].options.address}.`);
         botInstances.push(
           bot({
             court: courtContracts[i],

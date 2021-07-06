@@ -27,6 +27,7 @@ async function mainnet() {
   const mongoCollection = await mongoClient.createCollection(courtMongoCollection);
 
   run(bot, {
+    networkName: "Mainnet",
     archon,
     web3,
     mongoCollection,
@@ -46,6 +47,7 @@ async function xDai() {
   const mongoCollection = await mongoClient.createCollection(courtMongoCollection);
 
   run(bot, {
+    networkName: "xDAI",
     archon,
     web3,
     mongoCollection,
@@ -56,7 +58,10 @@ async function xDai() {
 }
 
 // Run bots and restart them on failures.
-async function run(bot, { web3, archon, courtContracts, policyRegistryContracts, mongoCollection, webhookUrl }) {
+async function run(
+  bot,
+  { networkName, web3, archon, courtContracts, policyRegistryContracts, mongoCollection, webhookUrl }
+) {
   // const privateKey = process.env.PRIVATE_KEY
   // const account = web3.eth.accounts.privateKeyToAccount(privateKey)
   // web3.eth.accounts.wallet.add(account)
@@ -79,7 +84,7 @@ async function run(bot, { web3, archon, courtContracts, policyRegistryContracts,
       }
       await Promise.all(botInstances);
     } catch (err) {
-      console.error("Bot error: ", err);
+      console.error(`${networkName} bot error: `, err);
       if (!process.env.AUTO_RESTART) {
         shouldRun = false;
       } else {

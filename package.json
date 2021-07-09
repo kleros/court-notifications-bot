@@ -14,8 +14,8 @@
   "private": false,
   "scripts": {
     "start": "env-cmd -f ./.env node src/index.js",
-    "start:mainnet": "env-cmd -f .env.mainnet node src/index.js",
-    "start:xdai": "env-cmd -f .env.xdai node src/index.js",
+    "start:mainnet": "env-cmd -f ./.env.mainnet node src/index.js",
+    "start:xdai": "env-cmd -f ./.env.xdai node src/index.js",
     "prepare": "husky install"
   },
   "devDependencies": {

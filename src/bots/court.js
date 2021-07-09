@@ -1,5 +1,8 @@
+const cuid = require("cuid");
 const axios = require("axios");
 const delay = require("delay");
+const safeParse = require("../utils/safe-parse");
+const mainLogger = require("../utils/logger");
 
 const Period = {
   Evidence: 0,
@@ -9,7 +12,13 @@ const Period = {
   Execution: 4,
 };
 
-module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, webhookUrl }) => {
+const DEFAULT_DELAY_AMOUNT = 5 * 60 * 1000; // 5 minutes
+const delayAmount = safeParse.number(process.env.DELAY_AMOUNT) || DEFAULT_DELAY_AMOUNT;
+
+module.exports = async (
+  { web3, court, policyRegistry, mongoCollection, archon, webhookUrl },
+  { logger = mainLogger.child({ executionId: cuid() }) } = {}
+) => {
   // Get the lower-case address instead of the checksumed version
   const courtAddress = String(court.options.address).toLowerCase();
 
@@ -17,20 +26,25 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
   let lastBlock = process.env.START_BLOCK;
   let currentBlock = process.env.START_BLOCK;
   let votingDisputes = [];
-  const appState = await mongoCollection.findOne({ courtAddress: courtAddress });
+  const appState = await mongoCollection.findOne({ courtAddress });
   if (appState) {
     lastBlock = appState.lastBlock;
     votingDisputes = appState.votingDisputes || [];
   } else {
     // if starting from scratch we can go from the current block
-    await mongoCollection.insertOne({ courtAddress: courtAddress, lastBlock: currentBlock });
+    await mongoCollection.insertOne({ courtAddress, lastBlock: currentBlock });
   }
   votingDisputes = [...new Set(votingDisputes)];
 
+  logger.debug({ votingDisputes }, "Current voting disputes");
+
   while (true) {
-    await delay(process.env.DELAY_AMOUNT);
+    await delay(delayAmount);
+    const internalLogger = logger.child({ logGroupId: cuid() });
+
     currentBlock = await web3.eth.getBlockNumber();
-    const drawEvents = await court.getPastEvents("Draw", {
+
+    const drawEvents = await getPastEvents(court, "Draw", {
       fromBlock: lastBlock,
       toBlock: "latest",
     });
@@ -39,8 +53,7 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
       const jurorsForDisputes = await getDrawnJurorsByDispute(drawEvents || []);
       for (const disputeID of Object.keys(jurorsForDisputes)) {
         for (const juror of jurorsForDisputes[disputeID]) {
-          console.log("SENDING DRAW EMAIL TO " + juror.address + " IN CASE " + disputeID);
-          await axios.post(webhookUrl, {
+          await notifyEvent({
             event: "Draw",
             _disputeID: disputeID,
             _appeal: juror.appeal,
@@ -50,7 +63,7 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
       }
     }
 
-    const newPeriods = await court.getPastEvents("NewPeriod", {
+    const newPeriods = await getPastEvents(court, "NewPeriod", {
       fromBlock: lastBlock,
       toBlock: "latest",
     });
@@ -61,26 +74,30 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
           const disputeID = newPeriodEvent.returnValues._disputeID;
           const jurors = await getJurorsInCurrentRound(disputeID, court);
           for (const juror of jurors) {
-            console.log("SENDING TIME TO VOTE EMAIL TO " + juror.address + " IN CASE " + disputeID);
-            await axios.post(webhookUrl, {
+            await notifyEvent({
               event: "Vote",
               _disputeID: disputeID,
               _address: juror.address,
             });
           }
           // add disputeID to list of disputes currently voting if not already there
-          if (votingDisputes.indexOf(disputeID) === -1) votingDisputes.push(disputeID);
+          if (votingDisputes.indexOf(disputeID) === -1) {
+            internalLogger.debug({ disputeID }, "Found new dispute with voting ongoing");
+            votingDisputes.push(disputeID);
+          }
         } else if (Number(newPeriodEvent.returnValues._period) === Period.Appeal) {
           const disputeID = newPeriodEvent.returnValues._disputeID;
+          const previousLength = votingDisputes.length;
           // remove disputeID from disputes currently voting
           votingDisputes = votingDisputes.filter((item) => item !== disputeID);
+
+          if (votingDisputes.length !== previousLength) {
+            internalLogger.debug({ disputeID }, "Removed dispute from ongoing voting list");
+          }
         }
       }
-      mongoCollection.findOneAndUpdate(
-        { courtAddress: courtAddress },
-        { $set: { votingDisputes: votingDisputes } },
-        { upsert: true }
-      );
+
+      await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { votingDisputes } }, { upsert: true });
     }
 
     for (const disputeID of votingDisputes) {
@@ -93,42 +110,44 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
         const jurors = await getJurorsInCurrentRound(disputeID, court);
         for (const juror of jurors) {
           if (!juror.voted) {
-            console.log("SENDING VOTE REMINDER EMAIL TO " + juror.address + " IN CASE " + disputeID);
-            await axios.post(webhookUrl, {
+            await notifyEvent({
               event: "VoteReminder",
               _disputeID: disputeID,
               _address: juror.address,
             });
           }
         }
+
+        const previousLength = votingDisputes.length;
         votingDisputes = votingDisputes.filter((item) => item !== disputeID);
-        mongoCollection.findOneAndUpdate(
-          { courtAddress: courtAddress },
-          { $set: { votingDisputes: votingDisputes } },
-          { upsert: true }
-        );
+
+        if (votingDisputes.length !== previousLength) {
+          internalLogger.debug({ disputeID }, "Removed dispute from ongoing voting list");
+        }
+
+        await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { votingDisputes } }, { upsert: true });
       }
     }
 
     // let jurors know about an appeal
-    const newAppeals = await court.getPastEvents("AppealDecision", {
+    const newAppeals = await getPastEvents(court, "AppealDecision", {
       fromBlock: lastBlock,
       toBlock: "latest",
     });
 
     for (const appeal of newAppeals) {
-      const jurorsInLastRound = await getJurorsInCurrentRound(appeal.returnValues._disputeID, court, true);
+      const disputeID = appeal.returnValues._disputeID;
+      const jurorsInLastRound = await getJurorsInCurrentRound(disputeID, court, true);
       for (const juror of jurorsInLastRound) {
-        console.log("SENDING APPEAL EMAIL TO " + juror.address + " IN CASE " + appeal.returnValues._disputeID);
-        await axios.post(webhookUrl, {
+        await notifyEvent({
           event: "Appeal",
-          _disputeID: appeal.returnValues._disputeID,
+          _disputeID: disputeID,
           _address: juror.address,
         });
       }
     }
 
-    const newTokenShiftEvents = await court.getPastEvents("TokenAndETHShift", {
+    const newTokenShiftEvents = await getPastEvents(court, "TokenAndETHShift", {
       fromBlock: lastBlock,
       toBlock: "latest",
     });
@@ -142,24 +161,27 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
           strictHashes: false,
         });
         if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
-          // Won the case
-          console.log("SENDING PNK WON " + account + " IN CASE " + disputeID);
-          await axios.post(webhookUrl, {
+          const ethWon = formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount);
+          const pnkWon = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
+
+          await notifyEvent({
             event: "Won",
             _disputeID: disputeID,
             _address: account,
-            _ethWon: formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount),
-            _pnkWon: formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount),
+            _ethWon: ethWon,
+            _pnkWon: pnkWon,
             _caseTitle: metaEvidence.metaEvidenceJSON.title,
           });
         } else {
           // Lost the case
           console.log("SENDING PNK LOSS " + account + " IN CASE " + disputeID);
-          await axios.post(webhookUrl, {
+          const pnkLost = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
+
+          await notifyEvent({
             event: "Lost",
             _disputeID: disputeID,
             _address: account,
-            _pnkLost: formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount),
+            _pnkLost: pnkLost,
             _caseTitle: metaEvidence.metaEvidenceJSON.title,
           });
         }
@@ -167,27 +189,45 @@ module.exports = async ({ web3, court, policyRegistry, mongoCollection, archon, 
     }
 
     // Staking
-    const stakeEvents = await court.getPastEvents("StakeSet", {
+    const stakeEvents = await getPastEvents(court, "StakeSet", {
       fromBlock: lastBlock,
       toBlock: "latest",
     });
     if (stakeEvents.length) {
       const jurors = await getSetStakesForJuror(stakeEvents, policyRegistry, web3);
-      for (const j of Object.keys(jurors)) {
-        await axios.post(webhookUrl, {
+      for (const address of Object.keys(jurors)) {
+        await notifyEvent({
           event: "StakeChanged",
-          _address: j,
-          _stakesChanged: jurors[j],
+          _address: address,
+          _stakesChanged: jurors[address],
         });
       }
     }
 
-    mongoCollection.findOneAndUpdate(
-      { courtAddress: courtAddress },
-      { $set: { lastBlock: currentBlock } },
-      { upsert: true }
-    );
+    await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { lastBlock: currentBlock } }, { upsert: true });
     lastBlock = currentBlock + 1;
+
+    // The functions bellow MUST be declared inside the loop because they close over
+    // the `internalLogger` variable.
+    async function getPastEvents(contract, event, { fromBlock, toBlock = "latest", filters }) {
+      internalLogger.debug(
+        { contract: contract.options.address, event, fromBlock, toBlock, filters },
+        "Fetching past events for contract"
+      );
+
+      return await contract.getPastEvents(event, { fromBlock, toBlock, filters });
+    }
+
+    async function notifyEvent(params) {
+      const requestId = cuid();
+      try {
+        internalLogger.debug({ requestId, webhookUrl, params }, "Submitting request to the webhook endpoint");
+        return await axios.post(webhookUrl, params);
+      } catch (err) {
+        internalLogger.error({ requestId, err }, "Failed to call the webhook endpoint");
+        throw err;
+      }
+    }
   }
 };
 

@@ -13,8 +13,9 @@
   "license": "MIT",
   "private": false,
   "scripts": {
-    "start": "env-cmd ./.env node src/index.js",
-    "start:production": "pm2 start ecosystem.config.js",
+    "start": "env-cmd -f ./.env node src/index.js",
+    "start:mainnet": "env-cmd -f .env.mainnet node src/index.js",
+    "start:xdai": "env-cmd -f .env.xdai node src/index.js",
     "prepare": "husky install"
   },
   "devDependencies": {
@@ -35,12 +36,17 @@
   "dependencies": {
     "@kleros/archon": "~0.10.4",
     "axios": "^0.18.0",
+    "cuid": "^2.1.8",
     "delay": "^4.1.0",
     "dotenv-safe": "^8.2.0",
-    "env-cmd": "^8.0.2",
+    "env-cmd": "^10.1.0",
     "mongodb": "^3.5.9",
+    "pino": "^6.11.3",
     "pm2": "^5.1.0",
     "web3": "1.2.6",
     "web3-provider-engine": "^14.2.0"
+  },
+  "volta": {
+    "node": "10.24.1"
   }
 }

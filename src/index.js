@@ -1,23 +1,26 @@
+const cuid = require("cuid");
 const delay = require("delay");
 const Web3 = require("web3");
 const Archon = require("@kleros/archon");
 
 const _mongoClient = require("./mongo-client");
 const bot = require("./bots/court");
-
-const _court = require("./contracts/court.json");
-const _xDaiCourt = require("./contracts/xdai-court.json");
-const _policyRegistry = require("./contracts/policy-registry.json");
+const { createContractsByChainId } = require("./contracts");
+const safeParse = require("./utils/safe-parse");
+const { ensureEnv } = require("./utils/safe-env");
+const mainLogger = require("./utils/logger");
 
 const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
+const chainId = safeParse.number(ensureEnv("CHAIN_ID"));
 
-mainnet();
+const DEFAULT_DELAY_AMOUNT = 5 * 60 * 1000; // 5 minutes
+const delayAmount = safeParse.number(process.env.DELAY_AMOUNT, DEFAULT_DELAY_AMOUNT);
 
-if (process.env.XDAI_ENABLED === "true") {
-  xDai();
-}
+const autoRestart = safeParse.boolean(process.env.AUTO_RESTART, false);
 
-async function mainnet() {
+start();
+
+async function start() {
   const web3 = new Web3(process.env.WEB3_PROVIDER_URL);
   const archon = new Archon(process.env.WEB3_PROVIDER_URL, ipfsGateway);
   const courtMongoCollection = process.env.COURT_MONGO_COLLECTION;
@@ -27,69 +30,42 @@ async function mainnet() {
   const mongoCollection = await mongoClient.createCollection(courtMongoCollection);
 
   run(bot, {
-    networkName: "Mainnet",
+    chainId,
     archon,
     web3,
     mongoCollection,
-    courtContracts: [new web3.eth.Contract(_court.abi, process.env.COURT_ADDRESS)],
-    policyRegistryContracts: [new web3.eth.Contract(_policyRegistry.abi, process.env.POLICY_REGISTRY_ADDRESS)],
     webhookUrl: process.env.WEBHOOK_URL,
-  });
-}
-
-async function xDai() {
-  const web3 = new Web3(process.env.XDAI_WEB3_PROVIDER_URL);
-  const archon = new Archon(process.env.XDAI_WEB3_PROVIDER_URL, ipfsGateway);
-  const courtMongoCollection = process.env.XDAI_COURT_MONGO_COLLECTION;
-
-  const mongoClient = await _mongoClient();
-  // connect to the right collection
-  const mongoCollection = await mongoClient.createCollection(courtMongoCollection);
-
-  run(bot, {
-    networkName: "xDAI",
-    archon,
-    web3,
-    mongoCollection,
-    courtContracts: [new web3.eth.Contract(_xDaiCourt.abi, process.env.XDAI_COURT_ADDRESS)],
-    policyRegistryContracts: [new web3.eth.Contract(_policyRegistry.abi, process.env.XDAI_POLICY_REGISTRY_ADDRESS)],
-    webhookUrl: process.env.XDAI_WEBHOOK_URL,
+    contracts: [createContractsByChainId[chainId](web3)],
   });
 }
 
 // Run bots and restart them on failures.
-async function run(
-  bot,
-  { networkName, web3, archon, courtContracts, policyRegistryContracts, mongoCollection, webhookUrl }
-) {
-  // const privateKey = process.env.PRIVATE_KEY
-  // const account = web3.eth.accounts.privateKeyToAccount(privateKey)
-  // web3.eth.accounts.wallet.add(account)
+async function run(bot, { chainId, web3, archon, mongoCollection, webhookUrl, contracts }) {
+  let isRunning = true;
 
-  const botInstances = [];
-  let shouldRun = true;
-  while (shouldRun) {
+  while (isRunning) {
     try {
-      for (let i = 0; i < courtContracts.length; i++) {
-        console.info(`${networkName}: starting bot for KlerosLiquid at ${courtContracts[i].options.address}.`);
-        botInstances.push(
-          bot({
-            court: courtContracts[i],
-            policyRegistry: policyRegistryContracts[i],
-            web3,
-            mongoCollection,
-            archon,
-            webhookUrl,
-          })
-        );
-      }
-      await Promise.all(botInstances);
+      await Promise.all(
+        contracts.map(async ({ court, policyRegistry }) => {
+          const logger = mainLogger.child({ executionId: cuid() });
+          logger.info(
+            { chainId, court: court.options.address, policyRegistry: policyRegistry.options.address, webhookUrl },
+            "Starting notificaiton bot for KlerosLiquid"
+          );
+
+          try {
+            return bot({ court, policyRegistry, web3, mongoCollection, archon, webhookUrl }, { logger });
+          } catch (err) {
+            logger.error({ err }, "Something went wrong with the bot");
+            throw err;
+          }
+        })
+      );
     } catch (err) {
-      console.error(`${networkName} bot error: `, err);
-      if (!process.env.AUTO_RESTART) {
-        shouldRun = false;
+      if (autoRestart && delayAmount > 0) {
+        await delay(delayAmount);
       } else {
-        await delay(30000);
+        isRunning = false;
       }
     }
   }

@@ -1,9 +1,18 @@
 module.exports = {
   apps: [
     {
-      name: "court-notification-bot",
-      script: "./src/index.js",
-      node_args: "-r dotenv-safe/config",
+      name: "mainnet",
+      interpreter: "/bin/bash",
+      script: "yarn",
+      args: ["start:mainnet"],
+      time: true,
+    },
+    {
+      name: "xdai",
+      interpreter: "/bin/bash",
+      script: "yarn",
+      args: ["start:xdai"],
+      time: true,
     },
   ],
 };

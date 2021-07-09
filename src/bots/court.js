@@ -225,7 +225,22 @@ module.exports = async (
       );
 
       try {
-        return await contract.getPastEvents(event, { fromBlock, toBlock, filters });
+        const events = await contract.getPastEvents(event, { fromBlock, toBlock, filters });
+
+        internalLogger.info(
+          {
+            requestId,
+            contract: contract.options.address,
+            event,
+            fromBlock,
+            toBlock,
+            filters,
+            count: events.length,
+          },
+          "Successfully fetched past events for contract"
+        );
+
+        return events;
       } catch (err) {
         internalLogger.error(
           {
@@ -237,7 +252,7 @@ module.exports = async (
             filters,
             err,
           },
-          "Failed to get past events for contract"
+          "Failed to fetch past events for contract"
         );
 
         throw err;

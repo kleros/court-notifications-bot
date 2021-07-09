@@ -10,7 +10,7 @@ function ensureEnv(key, msg = `process.env.${key} is not defined`) {
 
 const trimString =
   typeof String.prototype.trim === "function"
-    ? String.prototype.trim.bind(String.prototype)
+    ? (str) => str.trim()
     : (str) => str.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, "");
 
 module.exports = {

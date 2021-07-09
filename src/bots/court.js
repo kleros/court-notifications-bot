@@ -39,7 +39,6 @@ module.exports = async (
   logger.debug({ votingDisputes }, "Current voting disputes");
 
   while (true) {
-    await delay(delayAmount);
     const internalLogger = logger.child({ logGroupId: cuid() });
 
     currentBlock = await web3.eth.getBlockNumber();
@@ -206,6 +205,7 @@ module.exports = async (
 
     await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { lastBlock: currentBlock } }, { upsert: true });
     lastBlock = currentBlock + 1;
+    await delay(delayAmount);
 
     // The functions bellow MUST be declared inside the loop because they close over
     // the `internalLogger` variable.

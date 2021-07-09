@@ -210,12 +210,38 @@ module.exports = async (
     // The functions bellow MUST be declared inside the loop because they close over
     // the `internalLogger` variable.
     async function getPastEvents(contract, event, { fromBlock, toBlock = "latest", filters }) {
+      const requestId = cuid();
+
       internalLogger.info(
-        { contract: contract.options.address, event, fromBlock, toBlock, filters },
+        {
+          requestId,
+          contract: contract.options.address,
+          event,
+          fromBlock,
+          toBlock,
+          filters,
+        },
         "Fetching past events for contract"
       );
 
-      return await contract.getPastEvents(event, { fromBlock, toBlock, filters });
+      try {
+        return await contract.getPastEvents(event, { fromBlock, toBlock, filters });
+      } catch (err) {
+        internalLogger.error(
+          {
+            requestId,
+            contract: contract.options.address,
+            event,
+            fromBlock,
+            toBlock,
+            filters,
+            err,
+          },
+          "Failed to get past events for contract"
+        );
+
+        throw err;
+      }
     }
 
     async function notifyEvent(params) {

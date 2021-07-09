@@ -54,7 +54,7 @@ async function run(bot, { chainId, web3, archon, mongoCollection, webhookUrl, co
           );
 
           try {
-            return bot({ court, policyRegistry, web3, mongoCollection, archon, webhookUrl }, { logger });
+            return await bot({ court, policyRegistry, web3, mongoCollection, archon, webhookUrl }, { logger });
           } catch (err) {
             logger.error({ err }, "Something went wrong with the bot");
             throw err;

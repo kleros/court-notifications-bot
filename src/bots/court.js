@@ -36,7 +36,7 @@ module.exports = async (
   }
   votingDisputes = [...new Set(votingDisputes)];
 
-  logger.debug({ votingDisputes }, "Current voting disputes");
+  logger.info({ votingDisputes }, "Current voting disputes");
 
   while (true) {
     const internalLogger = logger.child({ logGroupId: cuid() });
@@ -81,7 +81,7 @@ module.exports = async (
           }
           // add disputeID to list of disputes currently voting if not already there
           if (votingDisputes.indexOf(disputeID) === -1) {
-            internalLogger.debug({ disputeID }, "Found new dispute with voting ongoing");
+            internalLogger.info({ disputeID }, "Found new dispute with voting ongoing");
             votingDisputes.push(disputeID);
           }
         } else if (Number(newPeriodEvent.returnValues._period) === Period.Appeal) {
@@ -91,7 +91,7 @@ module.exports = async (
           votingDisputes = votingDisputes.filter((item) => item !== disputeID);
 
           if (votingDisputes.length !== previousLength) {
-            internalLogger.debug({ disputeID }, "Removed dispute from ongoing voting list");
+            internalLogger.info({ disputeID }, "Removed dispute from ongoing voting list");
           }
         }
       }
@@ -121,7 +121,7 @@ module.exports = async (
         votingDisputes = votingDisputes.filter((item) => item !== disputeID);
 
         if (votingDisputes.length !== previousLength) {
-          internalLogger.debug({ disputeID }, "Removed dispute from ongoing voting list");
+          internalLogger.info({ disputeID }, "Removed dispute from ongoing voting list");
         }
 
         await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { votingDisputes } }, { upsert: true });
@@ -210,7 +210,7 @@ module.exports = async (
     // The functions bellow MUST be declared inside the loop because they close over
     // the `internalLogger` variable.
     async function getPastEvents(contract, event, { fromBlock, toBlock = "latest", filters }) {
-      internalLogger.debug(
+      internalLogger.info(
         { contract: contract.options.address, event, fromBlock, toBlock, filters },
         "Fetching past events for contract"
       );
@@ -221,7 +221,7 @@ module.exports = async (
     async function notifyEvent(params) {
       const requestId = cuid();
       try {
-        internalLogger.debug({ requestId, webhookUrl, params }, "Submitting request to the webhook endpoint");
+        internalLogger.info({ requestId, webhookUrl, params }, "Submitting request to the webhook endpoint");
         return await axios.post(webhookUrl, params);
       } catch (err) {
         internalLogger.error({ requestId, err }, "Failed to call the webhook endpoint");

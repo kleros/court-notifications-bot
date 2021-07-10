@@ -263,7 +263,10 @@ module.exports = async (
       const requestId = cuid();
       try {
         internalLogger.info({ requestId, webhookUrl, params }, "Submitting request to the webhook endpoint");
-        return await axios.post(webhookUrl, params);
+        const response = await axios.post(webhookUrl, params);
+        internalLogger.info({ requestId }, "Successfully submited the request to the webhook");
+
+        return response;
       } catch (err) {
         internalLogger.error({ requestId, err }, "Failed to call the webhook endpoint");
         throw err;

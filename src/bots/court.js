@@ -260,6 +260,7 @@ module.exports = async (
     }
 
     async function notifyEvent(params) {
+      await delay(10000);
       const requestId = cuid();
       try {
         internalLogger.info({ requestId, webhookUrl, params }, "Submitting request to the webhook endpoint");

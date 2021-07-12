@@ -173,7 +173,6 @@ module.exports = async (
           });
         } else {
           // Lost the case
-          console.log("SENDING PNK LOSS " + account + " IN CASE " + disputeID);
           const pnkLost = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
 
           await notifyEvent({
@@ -228,48 +227,28 @@ module.exports = async (
         const events = await contract.getPastEvents(event, { fromBlock, toBlock, filters });
 
         internalLogger.info(
-          {
-            requestId,
-            contract: contract.options.address,
-            event,
-            fromBlock,
-            toBlock,
-            filters,
-            count: events.length,
-          },
+          { requestId, event, count: events.length },
           "Successfully fetched past events for contract"
         );
 
         return events;
       } catch (err) {
-        internalLogger.error(
-          {
-            requestId,
-            contract: contract.options.address,
-            event,
-            fromBlock,
-            toBlock,
-            filters,
-            err,
-          },
-          "Failed to fetch past events for contract"
-        );
+        internalLogger.error({ requestId, event, err }, "Failed to fetch past events for contract");
 
         throw err;
       }
     }
 
     async function notifyEvent(params) {
-      await delay(10000);
       const requestId = cuid();
       try {
         internalLogger.info({ requestId, webhookUrl, params }, "Submitting request to the webhook endpoint");
         const response = await axios.post(webhookUrl, params);
-        internalLogger.info({ requestId }, "Successfully submited the request to the webhook");
+        internalLogger.info({ requestId }, "Successfully submitted the request to the webhook");
 
         return response;
       } catch (err) {
-        internalLogger.error({ requestId, err }, "Failed to call the webhook endpoint");
+        internalLogger.error({ requestId, webhookUrl, params, err }, "Failed to call the webhook endpoint");
         throw err;
       }
     }
@@ -369,7 +348,7 @@ const getSetStakesForJuror = async (setStakeEvents, policyRegistryInstance, web3
     }
 
     // Take the most recent value for each subcourt
-    jurors[log.returnValues._address][policy.name] = web3.utils.fromWei(log.returnValues._stake);
+    jurors[log.returnValues._address][policy.name] = Number(web3.utils.fromWei(log.returnValues._stake)).toFixed(0);
   }
 
   const formatted = {};

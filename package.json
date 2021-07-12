@@ -35,8 +35,7 @@
   },
   "dependencies": {
     "@kleros/archon": "~0.10.4",
-    "axios": "^0.18.0",
-    "cuid": "^2.1.8",
+    "axios": "^0.21.1",
     "delay": "^4.1.0",
     "dotenv-safe": "^8.2.0",
     "env-cmd": "^10.1.0",

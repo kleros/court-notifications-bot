@@ -1,2 +1,5 @@
-.env*
+.env
+.env.*
+!.env.example
+.eslintcache
 node_modules/

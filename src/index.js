@@ -1,37 +1,72 @@
-const delay = require('delay')
-const Web3 = require('web3')
-const ZeroClientProvider = require('web3-provider-engine/zero')
-const Archon = require('@kleros/archon')
+const cuid = require("cuid");
+const delay = require("delay");
+const Web3 = require("web3");
+const Archon = require("@kleros/archon");
 
-const _mongoClient = require('./mongo-client')
-const bots = [require('./bots/court')]
+const _mongoClient = require("./mongo-client");
+const bot = require("./bots/court");
+const { createContractsByChainId } = require("./contracts");
+const safeParse = require("./utils/safe-parse");
+const { ensureEnv } = require("./utils/safe-env");
+const mainLogger = require("./utils/logger");
+
+const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
+const chainId = safeParse.number(ensureEnv("CHAIN_ID"));
+
+const DEFAULT_DELAY_AMOUNT = 5 * 60 * 1000; // 5 minutes
+const delayAmount = safeParse.number(process.env.DELAY_AMOUNT, DEFAULT_DELAY_AMOUNT);
+
+const autoRestart = safeParse.boolean(process.env.AUTO_RESTART, false);
+
+start();
+
+async function start() {
+  const web3 = new Web3(process.env.WEB3_PROVIDER_URL);
+  const archon = new Archon(process.env.WEB3_PROVIDER_URL, ipfsGateway);
+  const courtMongoCollection = process.env.COURT_MONGO_COLLECTION;
+
+  const mongoClient = await _mongoClient();
+  // connect to the right collection
+  const mongoCollection = await mongoClient.createCollection(courtMongoCollection);
+
+  run(bot, {
+    chainId,
+    archon,
+    web3,
+    mongoCollection,
+    webhookUrl: process.env.WEBHOOK_URL,
+    contracts: [createContractsByChainId[chainId](web3)],
+  });
+}
 
 // Run bots and restart them on failures.
-const run = async bot => {
-  // Create an instance of `web3` for each bot.
-  const web3 = new Web3(process.env.WEB3_PROVIDER_URL)
-  // const privateKey = process.env.PRIVATE_KEY
-  // const account = web3.eth.accounts.privateKeyToAccount(privateKey)
-  // web3.eth.accounts.wallet.add(account)
-  const archon = new Archon(process.env.WEB3_PROVIDER_URL, 'https://ipfs.kleros.io')
-  const mongoClient = await _mongoClient()
-  const courtAddresses = [
-    process.env.COURT_CONTRACT_ADDRESS,
-  ]
+async function run(bot, { chainId, web3, archon, mongoCollection, webhookUrl, contracts }) {
+  let isRunning = true;
 
-  let bots = []
-  let run = true
-  while (run) {
+  while (isRunning) {
     try {
-      for (let i=0; i<courtAddresses.length; i++) {
-        bots.push(bot(web3, mongoClient, courtAddresses[i], archon))
-      }
-      await Promise.all(bots)
+      await Promise.all(
+        contracts.map(async ({ court, policyRegistry }) => {
+          const logger = mainLogger.child({ executionId: cuid() });
+          logger.info(
+            { chainId, court: court.options.address, policyRegistry: policyRegistry.options.address, webhookUrl },
+            "Starting notificaiton bot for KlerosLiquid"
+          );
+
+          try {
+            return await bot({ court, policyRegistry, web3, mongoCollection, archon, webhookUrl }, { logger });
+          } catch (err) {
+            logger.error({ err }, "Something went wrong with the bot");
+            throw err;
+          }
+        })
+      );
     } catch (err) {
-      console.error('Bot error: ', err)
-      if (!process.env.AUTO_RESTART) run = false
-      else await delay(30000)
-    }  
+      if (autoRestart && delayAmount > 0) {
+        await delay(delayAmount);
+      } else {
+        isRunning = false;
+      }
+    }
   }
 }
-bots.forEach(run)

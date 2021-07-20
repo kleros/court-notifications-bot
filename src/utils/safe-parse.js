@@ -15,7 +15,7 @@ module.exports = {
 
     let parsedValue;
     try {
-      parsedValue = JSON.parse(parsedValue);
+      parsedValue = JSON.parse(value);
     } catch (err) {
       parsedValue = defaultValue;
     }

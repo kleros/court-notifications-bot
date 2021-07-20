@@ -63,8 +63,11 @@ async function run(bot, { chainId, web3, archon, mongoCollection, webhookUrl, co
       );
     } catch (err) {
       if (autoRestart && delayAmount > 0) {
+        mainLogger.info(`Restarting bot after ${delayAmount}ms`);
         await delay(delayAmount);
       } else {
+        mainLogger.warn({ autoRestart, delayAmount }, `Bot will not be automatically restarted`);
+        await delay(delayAmount);
         isRunning = false;
       }
     }

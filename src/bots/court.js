@@ -343,13 +343,26 @@ const getSetStakesForJuror = async (setStakeEvents, policyRegistryInstance, web3
       if (uri.substring(0, 6) === "/ipfs/") {
         uri = `https://ipfs.kleros.io${uri}`;
       }
-      policy = (await axios.get(uri)).data;
-      subcourtCache[log.returnValues._subcourtID] = policy;
+      try {
+        policy = (await axios.get(uri)).data;
+        subcourtCache[log.returnValues._subcourtID] = policy;
+      } catch (error) {
+        console.error(`Failed to fetch policy from URI: ${uri}`, error);
+        continue; // If invalid subcourt URI, skip notification of StakeSet.
+      }
+    }
+
+    // Check for empty or undefined policy name
+    if (!policy.name) {
+      console.warn(`Empty policy name encountered for subcourtID: ${log.returnValues._subcourtID}`);
+      continue;
     }
 
     // Take the most recent value for each subcourt
     jurors[log.returnValues._address][policy.name] = Number(web3.utils.fromWei(log.returnValues._stake)).toFixed(0);
   }
+}
+
 
   const formatted = {};
   for (const j of Object.keys(jurors)) {

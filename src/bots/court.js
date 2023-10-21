@@ -352,9 +352,17 @@ const getSetStakesForJuror = async (setStakeEvents, policyRegistryInstance, web3
       }
     }
 
+    // Check for empty or undefined policy name
+    if (!policy.name) {
+      console.warn(`Empty policy name encountered for subcourtID: ${log.returnValues._subcourtID}`);
+      continue;
+    }
+
     // Take the most recent value for each subcourt
     jurors[log.returnValues._address][policy.name] = Number(web3.utils.fromWei(log.returnValues._stake)).toFixed(0);
   }
+}
+
 
   const formatted = {};
   for (const j of Object.keys(jurors)) {

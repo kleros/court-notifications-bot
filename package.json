@@ -37,6 +37,7 @@
     "@kleros/archon": "~2.3.0",
     "axios": "^0.21.1",
     "delay": "^4.1.0",
+    "cuid": "^2.1.8",
     "dotenv-safe": "^8.2.0",
     "env-cmd": "^10.1.0",
     "mongodb": "^3.5.9",

@@ -34,7 +34,7 @@
     "standard-version": "^4.4.0"
   },
   "dependencies": {
-    "@kleros/archon": "~0.10.4",
+    "@kleros/archon": "~2.3.0",
     "axios": "^0.21.1",
     "delay": "^4.1.0",
     "dotenv-safe": "^8.2.0",

@@ -11,7 +11,6 @@
   "version": "1.0.0",
   "author": "Kleros",
   "license": "MIT",
-  "private": false,
   "scripts": {
     "start": "env-cmd -f ./.env node src/index.js",
     "start:mainnet": "env-cmd -f ./.env.mainnet node src/index.js",
@@ -31,13 +30,14 @@
     "lint-staged": "^10.0.0",
     "prettier": "^2.3.1",
     "prettier-config-standard": "^4.0.0",
-    "standard-version": "^4.4.0"
+    "standard-version": "^4.4.0",
+    "node-gyp": "9.4.0"
   },
   "dependencies": {
     "@kleros/archon": "~2.3.0",
     "axios": "^0.21.1",
+    "cuid": "^3.0.0",
     "delay": "^4.1.0",
-    "cuid": "^2.1.8",
     "dotenv-safe": "^8.2.0",
     "env-cmd": "^10.1.0",
     "mongodb": "^3.5.9",
@@ -47,6 +47,10 @@
     "web3-provider-engine": "^14.2.0"
   },
   "volta": {
-    "node": "10.24.1"
+    "node": "14.21.3",
+    "yarn": "1.22.19"
+  },
+  "resolutions": {
+    "v8-sandbox": "2.2.2"
   }
 }

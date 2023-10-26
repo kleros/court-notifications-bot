@@ -361,8 +361,6 @@ const getSetStakesForJuror = async (setStakeEvents, policyRegistryInstance, web3
     // Take the most recent value for each subcourt
     jurors[log.returnValues._address][policy.name] = Number(web3.utils.fromWei(log.returnValues._stake)).toFixed(0);
   }
-}
-
 
   const formatted = {};
   for (const j of Object.keys(jurors)) {

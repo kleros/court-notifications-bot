@@ -47,7 +47,7 @@
     "web3-provider-engine": "^14.2.0"
   },
   "volta": {
-    "node": "14.21.3",
+    "node": "16.20.2",
     "yarn": "1.22.19"
   },
   "resolutions": {

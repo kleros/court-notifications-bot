@@ -24,7 +24,7 @@ echo "xdai"
 source ./.env.xdai
 mongoLastBlock=$(mongo --quiet --eval 'db.xDaiCourt.find().forEach(r=>print(JSON.stringify(r)))' xDaiCourtBlocks | jq -r .lastBlock)
 rpcLastBlock=$(rpcLastBlock $WEB3_PROVIDER_URL)
-lastRun=$(( (rpcLastBlock - mongoLastBlock) * 12 / 60 ))
+lastRun=$(( (rpcLastBlock - mongoLastBlock) * 5 / 60 ))
 echo "blockNumber from mongo: $mongoLastBlock"
 echo "blockNumber from RPC: $rpcLastBlock"
 echo "last run: $lastRun minutes ago"

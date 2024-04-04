@@ -41,11 +41,18 @@ module.exports = async (
   while (true) {
     const internalLogger = logger.child({ logGroupId: cuid() });
 
-    currentBlock = await web3.eth.getBlockNumber();
+    // 1 epoch before the latest block to be in a finalised chain.
+    // In gnosis should be 16, but considering the biggest to be in the safe side.
+    currentBlock = (await web3.eth.getBlockNumber()) - 32;
+    if (currentBlock < lastBlock) {
+      internalLogger.info("Too early to check events. Let's wait some time.");
+      await delay(delayAmount);
+      continue;
+    }
 
     const drawEvents = await getPastEvents(court, "Draw", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
     if (drawEvents.length) {
@@ -64,7 +71,7 @@ module.exports = async (
 
     const newPeriods = await getPastEvents(court, "NewPeriod", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
     if (newPeriods.length) {
@@ -131,7 +138,7 @@ module.exports = async (
     // let jurors know about an appeal
     const newAppeals = await getPastEvents(court, "AppealDecision", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
     for (const appeal of newAppeals) {
@@ -148,7 +155,7 @@ module.exports = async (
 
     const newTokenShiftEvents = await getPastEvents(court, "TokenAndETHShift", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
     const tokenShiftsByDispute = formatTokenMovementEvents(newTokenShiftEvents, web3);
@@ -189,7 +196,7 @@ module.exports = async (
     // Staking
     const stakeEvents = await getPastEvents(court, "StakeSet", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
     if (stakeEvents.length) {
       const jurors = await getSetStakesForJuror(stakeEvents, policyRegistry, web3);

@@ -41,14 +41,21 @@ module.exports = async (
   while (true) {
     const internalLogger = logger.child({ logGroupId: cuid() });
 
-    currentBlock = await web3.eth.getBlockNumber();
+    // 1 epoch before the latest block to be in a finalised chain.
+    // In gnosis should be 16, but considering the biggest to be in the safe side.
+    currentBlock = (await web3.eth.getBlockNumber()) - 32;
+    if (currentBlock < lastBlock) {
+      internalLogger.info("Too early to check events. Let's wait some time.");
+      await delay(delayAmount);
+      continue;
+    }
 
     const drawEvents = await getPastEvents(court, "Draw", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
-    if (drawEvents.length) {
+    if (Array.isArray(drawEvents)) {
       const jurorsForDisputes = await getDrawnJurorsByDispute(drawEvents || []);
       for (const disputeID of Object.keys(jurorsForDisputes)) {
         for (const juror of jurorsForDisputes[disputeID]) {
@@ -60,14 +67,20 @@ module.exports = async (
           });
         }
       }
+    } else {
+      // If is not an array, is an error. Skiping the iteration.
+      // Is prefered to repeat some notifications than missing some.
+      internalLogger.error("Restarting the bot due to error. Waiting the delay to restart");
+      await delay(delayAmount);
+      continue;
     }
 
     const newPeriods = await getPastEvents(court, "NewPeriod", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
-    if (newPeriods.length) {
+    if (Array.isArray(newPeriods)) {
       for (const newPeriodEvent of newPeriods) {
         if (Number(newPeriodEvent.returnValues._period) === Period.Vote) {
           const disputeID = newPeriodEvent.returnValues._disputeID;
@@ -97,6 +110,12 @@ module.exports = async (
       }
 
       await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { votingDisputes } }, { upsert: true });
+    } else {
+      // If is not an array, is an error. Skiping the iteration.
+      // Is prefered to repeat some notifications than missing some.
+      internalLogger.error("Restarting the bot due to error. Waiting the delay to restart");
+      await delay(delayAmount);
+      continue;
     }
 
     for (const disputeID of votingDisputes) {
@@ -131,67 +150,88 @@ module.exports = async (
     // let jurors know about an appeal
     const newAppeals = await getPastEvents(court, "AppealDecision", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
-    for (const appeal of newAppeals) {
-      const disputeID = appeal.returnValues._disputeID;
-      const jurorsInLastRound = await getJurorsInCurrentRound(disputeID, court, true);
-      for (const juror of jurorsInLastRound) {
-        await notifyEvent({
-          event: "Appeal",
-          _disputeID: disputeID,
-          _address: juror.address,
-        });
+    if (Array.isArray(newAppeals)) {
+      for (const appeal of newAppeals) {
+        const disputeID = appeal.returnValues._disputeID;
+        const jurorsInLastRound = await getJurorsInCurrentRound(disputeID, court, true);
+        for (const juror of jurorsInLastRound) {
+          await notifyEvent({
+            event: "Appeal",
+            _disputeID: disputeID,
+            _address: juror.address,
+          });
+        }
       }
+    } else {
+      // If is not an array, is an error. Skiping the iteration.
+      // Is prefered to repeat some notifications than missing some.
+      internalLogger.error("Restarting the bot due to error. Waiting the delay to restart");
+      await delay(delayAmount);
+      continue;
     }
 
     const newTokenShiftEvents = await getPastEvents(court, "TokenAndETHShift", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
 
-    const tokenShiftsByDispute = formatTokenMovementEvents(newTokenShiftEvents, web3);
-    for (const disputeID of Object.keys(tokenShiftsByDispute)) {
-      for (const account of Object.keys(tokenShiftsByDispute[disputeID])) {
-        const _dispute = await court.methods.disputes(disputeID).call();
-        const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
-        const metaEvidence = await archon.arbitrable.getMetaEvidence(_dispute.arbitrated, disputeData.metaEvidenceID, {
-          strictHashes: false,
-        });
-        if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
-          const ethWon = formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount);
-          const pnkWon = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
+    if (Array.isArray(newTokenShiftEvents)) {
+      const tokenShiftsByDispute = formatTokenMovementEvents(newTokenShiftEvents, web3);
+      for (const disputeID of Object.keys(tokenShiftsByDispute)) {
+        for (const account of Object.keys(tokenShiftsByDispute[disputeID])) {
+          const _dispute = await court.methods.disputes(disputeID).call();
+          const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
+          const metaEvidence = await archon.arbitrable.getMetaEvidence(
+            _dispute.arbitrated,
+            disputeData.metaEvidenceID,
+            {
+              strictHashes: false,
+            }
+          );
+          if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
+            const ethWon = formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount);
+            const pnkWon = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
 
-          await notifyEvent({
-            event: "Won",
-            _disputeID: disputeID,
-            _address: account,
-            _ethWon: ethWon,
-            _pnkWon: pnkWon,
-            _caseTitle: metaEvidence.metaEvidenceJSON.title,
-          });
-        } else {
-          // Lost the case
-          const pnkLost = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
+            await notifyEvent({
+              event: "Won",
+              _disputeID: disputeID,
+              _address: account,
+              _ethWon: ethWon,
+              _pnkWon: pnkWon,
+              _caseTitle: metaEvidence.metaEvidenceJSON.title,
+            });
+          } else {
+            // Lost the case
+            const pnkLost = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
 
-          await notifyEvent({
-            event: "Lost",
-            _disputeID: disputeID,
-            _address: account,
-            _pnkLost: pnkLost,
-            _caseTitle: metaEvidence.metaEvidenceJSON.title,
-          });
+            await notifyEvent({
+              event: "Lost",
+              _disputeID: disputeID,
+              _address: account,
+              _pnkLost: pnkLost,
+              _caseTitle: metaEvidence.metaEvidenceJSON.title,
+            });
+          }
         }
       }
+    } else {
+      // If is not an array, is an error. Skiping the iteration.
+      // Is prefered to repeat some notifications than missing some.
+      internalLogger.error("Restarting the bot due to error. Waiting the delay to restart");
+      await delay(delayAmount);
+      continue;
     }
 
     // Staking
     const stakeEvents = await getPastEvents(court, "StakeSet", {
       fromBlock: lastBlock,
-      toBlock: "latest",
+      toBlock: currentBlock,
     });
-    if (stakeEvents.length) {
+
+    if (Array.isArray(stakeEvents)) {
       const jurors = await getSetStakesForJuror(stakeEvents, policyRegistry, web3);
       for (const address of Object.keys(jurors)) {
         await notifyEvent({
@@ -200,10 +240,17 @@ module.exports = async (
           _stakesChanged: jurors[address],
         });
       }
+    } else {
+      // If is not an array, is an error. Skiping the iteration.
+      // Is prefered to repeat some notifications than missing some.
+      internalLogger.error("Restarting the bot due to error. Waiting the delay to restart");
+      await delay(delayAmount);
+      continue;
     }
 
     await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { lastBlock: currentBlock } }, { upsert: true });
     lastBlock = currentBlock + 1;
+    internalLogger.info(`Iteration concluded succesfully. Waiting ${delayAmount / 1000} seconds to start again.`);
     await delay(delayAmount);
 
     // The functions bellow MUST be declared inside the loop because they close over
@@ -223,20 +270,41 @@ module.exports = async (
         "Fetching past events for contract"
       );
 
-      try {
-        const events = await contract.getPastEvents(event, { fromBlock, toBlock, filters });
-
-        internalLogger.info(
-          { requestId, event, count: events.length },
-          "Successfully fetched past events for contract"
-        );
-
-        return events;
-      } catch (err) {
-        internalLogger.error({ requestId, event, err }, "Failed to fetch past events for contract");
-
-        throw err;
+      let error;
+      // Try 4 times to get the past events to handle the server unavailable errors.
+      for (let it = 0; it <= 3; it++) {
+        try {
+          const events = await contract.getPastEvents(event, { fromBlock, toBlock, filters });
+          if (Array.isArray(events)) {
+            internalLogger.info(
+              { requestId, event, count: events.length },
+              "Successfully fetched past events for contract"
+            );
+            return events;
+          } else {
+            if (it === 3) {
+              // events here is an object, not an array
+              error = events;
+              internalLogger.warn(
+                { requestId, event, events },
+                `Failed to fetch past events for contract. Bot should be restarted`
+              );
+            } else {
+              internalLogger.warn(
+                { requestId, event, events },
+                `Failed to fetch past events for contract. Scheduling to try again in ${5 * (it + 2)} seconds.`
+              );
+              // Add incremental delay with the iterations. Starting with 10 seconds.
+              await delay(5 * 1000 * (it + 2));
+            }
+          }
+        } catch (err) {
+          // Unexpected error.
+          internalLogger.error({ requestId, event, err }, "Failed to fetch past events for contract");
+          return err;
+        }
       }
+      return error;
     }
 
     async function notifyEvent(params) {

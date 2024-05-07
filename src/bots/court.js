@@ -187,16 +187,23 @@ module.exports = async (
       const tokenShiftsByDispute = formatTokenMovementEvents(newTokenShiftEvents, web3);
       for (const disputeID of Object.keys(tokenShiftsByDispute)) {
         for (const account of Object.keys(tokenShiftsByDispute[disputeID])) {
-          // const _dispute = await court.methods.disputes(disputeID).call();
-          // const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
-          // const metaEvidence = await archon.arbitrable.getMetaEvidence(
-          //   _dispute.arbitrated,
-          //   disputeData.metaEvidenceID,
-          //   {
-          //     strictHashes: false,
-          //   }
-          // );
-          const caseTitle = "";
+          let caseTitle = '';
+          try {
+            const _dispute = await court.methods.disputes(disputeID).call();
+            const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
+            const metaEvidence = await archon.arbitrable.getMetaEvidence(
+              _dispute.arbitrated,
+              disputeData.metaEvidenceID,
+              {
+                strictHashes: false,
+              }
+            );
+            caseTitle = metaEvidence.metaEvidenceJSON.title
+          } catch(err) {
+            logger.error(`Error trying to read the case title of dispute ${disputeID}.`);
+            logger.error(err);
+          }
+
           if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
             const ethWon = formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount);
             const pnkWon = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);

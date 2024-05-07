@@ -23,7 +23,7 @@ module.exports = async (
   const courtAddress = String(court.options.address).toLowerCase();
 
   // get our starting point
-  let lastBlock = process.env.START_BLOCK;
+  let lastBlock = Number(process.env.START_BLOCK);
   let currentBlock = Number(process.env.START_BLOCK);
   let votingDisputes = [];
   const appState = await mongoCollection.findOne({ courtAddress });
@@ -187,15 +187,16 @@ module.exports = async (
       const tokenShiftsByDispute = formatTokenMovementEvents(newTokenShiftEvents, web3);
       for (const disputeID of Object.keys(tokenShiftsByDispute)) {
         for (const account of Object.keys(tokenShiftsByDispute[disputeID])) {
-          const _dispute = await court.methods.disputes(disputeID).call();
-          const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
-          const metaEvidence = await archon.arbitrable.getMetaEvidence(
-            _dispute.arbitrated,
-            disputeData.metaEvidenceID,
-            {
-              strictHashes: false,
-            }
-          );
+          // const _dispute = await court.methods.disputes(disputeID).call();
+          // const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
+          // const metaEvidence = await archon.arbitrable.getMetaEvidence(
+          //   _dispute.arbitrated,
+          //   disputeData.metaEvidenceID,
+          //   {
+          //     strictHashes: false,
+          //   }
+          // );
+          const caseTitle = "";
           if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
             const ethWon = formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount);
             const pnkWon = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
@@ -206,7 +207,7 @@ module.exports = async (
               _address: account,
               _ethWon: ethWon,
               _pnkWon: pnkWon,
-              _caseTitle: metaEvidence.metaEvidenceJSON.title,
+              _caseTitle: caseTitle
             });
           } else {
             // Lost the case
@@ -217,7 +218,7 @@ module.exports = async (
               _disputeID: disputeID,
               _address: account,
               _pnkLost: pnkLost,
-              _caseTitle: metaEvidence.metaEvidenceJSON.title,
+              _caseTitle: caseTitle
             });
           }
         }

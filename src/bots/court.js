@@ -44,6 +44,7 @@ module.exports = async (
     // 1 epoch before the latest block to be in a finalised chain.
     // In gnosis should be 16, but considering the biggest to be in the safe side.
     currentBlock = Number(await web3.eth.getBlockNumber()) - 32;
+    var batching = false;
     if (currentBlock < lastBlock) {
       internalLogger.info("Too early to check events. Let's wait some time.");
       await delay(delayAmount);
@@ -53,6 +54,9 @@ module.exports = async (
       // avoid requesting large number of blocks.
       internalLogger.info("Too many blocks, reducing the scope of currentBlock to be 1k blocks more than starting block")
       currentBlock = lastBlock + 999;
+      batching = true;
+    } else {
+      batching = false;
     }
 
     const drawEvents = await getPastEvents(court, "Draw", {
@@ -263,8 +267,11 @@ module.exports = async (
 
     await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { lastBlock: currentBlock } }, { upsert: true });
     lastBlock = currentBlock + 1;
+    // Avoid delay if i've reduced the scope of the blocks.
+    if (!batching) {
     internalLogger.info(`Iteration concluded succesfully. Waiting ${delayAmount / 1000} seconds to start again.`);
     await delay(delayAmount);
+    }
 
     // The functions bellow MUST be declared inside the loop because they close over
     // the `internalLogger` variable.

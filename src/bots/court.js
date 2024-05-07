@@ -24,7 +24,7 @@ module.exports = async (
 
   // get our starting point
   let lastBlock = process.env.START_BLOCK;
-  let currentBlock = process.env.START_BLOCK;
+  let currentBlock = Number(process.env.START_BLOCK);
   let votingDisputes = [];
   const appState = await mongoCollection.findOne({ courtAddress });
   if (appState) {
@@ -43,11 +43,16 @@ module.exports = async (
 
     // 1 epoch before the latest block to be in a finalised chain.
     // In gnosis should be 16, but considering the biggest to be in the safe side.
-    currentBlock = (await web3.eth.getBlockNumber()) - 32;
+    currentBlock = Number(await web3.eth.getBlockNumber()) - 32;
     if (currentBlock < lastBlock) {
       internalLogger.info("Too early to check events. Let's wait some time.");
       await delay(delayAmount);
       continue;
+    }
+    if (currentBlock >= lastBlock + 999) {
+      // avoid requesting large number of blocks.
+      internalLogger.info("Too many blocks, reducing the scope of currentBlock to be 1k blocks more than starting block")
+      currentBlock = lastBlock + 999;
     }
 
     const drawEvents = await getPastEvents(court, "Draw", {

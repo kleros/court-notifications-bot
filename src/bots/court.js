@@ -429,7 +429,7 @@ const getSetStakesForJuror = async (setStakeEvents, policyRegistryInstance, web3
     if (!subcourtCache[log.returnValues._subcourtID]) {
       let uri = await policyRegistryInstance.methods.policies(log.returnValues._subcourtID).call();
       if (uri.substring(0, 6) === "/ipfs/") {
-        uri = `https://ipfs.kleros.io${uri}`;
+        uri = `https://cdn.kleros.link${uri}`;
       }
       policy = (await axios.get(uri)).data;
       subcourtCache[log.returnValues._subcourtID] = policy;

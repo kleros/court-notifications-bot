@@ -10,7 +10,7 @@ const safeParse = require("./utils/safe-parse");
 const { ensureEnv } = require("./utils/safe-env");
 const mainLogger = require("./utils/logger");
 
-const ipfsGateway = process.env.IPFS_GATEWAY || "https://ipfs.kleros.io";
+const ipfsGateway = process.env.IPFS_GATEWAY || "https://cdn.kleros.link";
 const chainId = safeParse.number(ensureEnv("CHAIN_ID"));
 
 const DEFAULT_DELAY_AMOUNT = 5 * 60 * 1000; // 5 minutes

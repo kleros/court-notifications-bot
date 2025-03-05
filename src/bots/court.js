@@ -44,7 +44,7 @@ module.exports = async (
     // 1 epoch before the latest block to be in a finalised chain.
     // In gnosis should be 16, but considering the biggest to be in the safe side.
     currentBlock = Number(await web3.eth.getBlockNumber()) - 32;
-    let batching = false;
+    var batching = false;
     if (currentBlock < lastBlock) {
       internalLogger.info("Too early to check events. Let's wait some time.");
       await delay(delayAmount);
@@ -55,6 +55,7 @@ module.exports = async (
       internalLogger.info(
         "Too many blocks, reducing the scope of currentBlock to be 1k blocks more than starting block"
       );
+
       currentBlock = lastBlock + 999;
       batching = true;
     } else {
@@ -194,6 +195,7 @@ module.exports = async (
       for (const disputeID of Object.keys(tokenShiftsByDispute)) {
         for (const account of Object.keys(tokenShiftsByDispute[disputeID])) {
           let caseTitle = "";
+
           try {
             const _dispute = await court.methods.disputes(disputeID).call();
             const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);

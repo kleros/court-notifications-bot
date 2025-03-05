@@ -23,8 +23,8 @@ module.exports = async (
   const courtAddress = String(court.options.address).toLowerCase();
 
   // get our starting point
-  let lastBlock = process.env.START_BLOCK;
-  let currentBlock = process.env.START_BLOCK;
+  let lastBlock = Number(process.env.START_BLOCK);
+  let currentBlock = Number(process.env.START_BLOCK);
   let votingDisputes = [];
   const appState = await mongoCollection.findOne({ courtAddress });
   if (appState) {
@@ -43,11 +43,22 @@ module.exports = async (
 
     // 1 epoch before the latest block to be in a finalised chain.
     // In gnosis should be 16, but considering the biggest to be in the safe side.
-    currentBlock = (await web3.eth.getBlockNumber()) - 32;
+    currentBlock = Number(await web3.eth.getBlockNumber()) - 32;
+    let batching = false;
     if (currentBlock < lastBlock) {
       internalLogger.info("Too early to check events. Let's wait some time.");
       await delay(delayAmount);
       continue;
+    }
+    if (currentBlock >= lastBlock + 999) {
+      // avoid requesting large number of blocks.
+      internalLogger.info(
+        "Too many blocks, reducing the scope of currentBlock to be 1k blocks more than starting block"
+      );
+      currentBlock = lastBlock + 999;
+      batching = true;
+    } else {
+      batching = false;
     }
 
     const drawEvents = await getPastEvents(court, "Draw", {
@@ -182,15 +193,23 @@ module.exports = async (
       const tokenShiftsByDispute = formatTokenMovementEvents(newTokenShiftEvents, web3);
       for (const disputeID of Object.keys(tokenShiftsByDispute)) {
         for (const account of Object.keys(tokenShiftsByDispute[disputeID])) {
-          const _dispute = await court.methods.disputes(disputeID).call();
-          const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
-          const metaEvidence = await archon.arbitrable.getMetaEvidence(
-            _dispute.arbitrated,
-            disputeData.metaEvidenceID,
-            {
-              strictHashes: false,
-            }
-          );
+          let caseTitle = "";
+          try {
+            const _dispute = await court.methods.disputes(disputeID).call();
+            const disputeData = await archon.arbitrable.getDispute(_dispute.arbitrated, courtAddress, disputeID);
+            const metaEvidence = await archon.arbitrable.getMetaEvidence(
+              _dispute.arbitrated,
+              disputeData.metaEvidenceID,
+              {
+                strictHashes: false,
+              }
+            );
+            caseTitle = metaEvidence.metaEvidenceJSON.title;
+          } catch (err) {
+            logger.error(`Error trying to read the case title of dispute ${disputeID}.`);
+            logger.error(err);
+          }
+
           if (tokenShiftsByDispute[disputeID][account].ethAmount > 0) {
             const ethWon = formatAmount(tokenShiftsByDispute[disputeID][account].ethAmount);
             const pnkWon = formatAmount(tokenShiftsByDispute[disputeID][account].pnkAmount);
@@ -201,7 +220,7 @@ module.exports = async (
               _address: account,
               _ethWon: ethWon,
               _pnkWon: pnkWon,
-              _caseTitle: metaEvidence.metaEvidenceJSON.title,
+              _caseTitle: caseTitle,
             });
           } else {
             // Lost the case
@@ -212,7 +231,7 @@ module.exports = async (
               _disputeID: disputeID,
               _address: account,
               _pnkLost: pnkLost,
-              _caseTitle: metaEvidence.metaEvidenceJSON.title,
+              _caseTitle: caseTitle,
             });
           }
         }
@@ -250,8 +269,11 @@ module.exports = async (
 
     await mongoCollection.findOneAndUpdate({ courtAddress }, { $set: { lastBlock: currentBlock } }, { upsert: true });
     lastBlock = currentBlock + 1;
-    internalLogger.info(`Iteration concluded succesfully. Waiting ${delayAmount / 1000} seconds to start again.`);
-    await delay(delayAmount);
+    // Avoid delay if i've reduced the scope of the blocks.
+    if (!batching) {
+      internalLogger.info(`Iteration concluded succesfully. Waiting ${delayAmount / 1000} seconds to start again.`);
+      await delay(delayAmount);
+    }
 
     // The functions bellow MUST be declared inside the loop because they close over
     // the `internalLogger` variable.
